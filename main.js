@@ -3,6 +3,7 @@ import settings from './settings.js';
 import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
 import { readFileSync } from 'fs';
+import { findLMStudio } from './src/mindcraft/discovery.js';
 
 function parseArguments() {
     return yargs(hideBin(process.argv))
@@ -38,6 +39,9 @@ if (args.task_path) {
 }
 
 // these environment variables override certain settings
+if (process.env.MINECRAFT_HOST) {
+    settings.host = process.env.MINECRAFT_HOST;
+}
 if (process.env.MINECRAFT_PORT) {
     settings.port = process.env.MINECRAFT_PORT;
 }
@@ -70,11 +74,33 @@ if (process.env.SETTINGS_JSON) {
     }
 }
 
-
 Mindcraft.init(false, settings.mindserver_port, settings.auto_open_ui);
+
+// Resolve the LLM endpoint once: explicit env var wins, otherwise scan the LAN for LM Studio.
+let llmUrl = process.env.LLM_URL || null;
+if (!llmUrl) {
+    llmUrl = await findLMStudio(process.env.LLM_PORT ? Number(process.env.LLM_PORT) : 1234);
+    if (!llmUrl) {
+        console.error('No LLM_URL set and LM Studio was not found on the LAN. Set LLM_URL explicitly to continue.');
+        process.exit(1);
+    }
+}
+const llmModel = process.env.LLM_MODEL || 'andy-4';
+const embeddingModel = process.env.EMBEDDING_MODEL || 'text-embedding-embeddinggemma-300m';
 
 for (let profile of settings.profiles) {
     const profile_json = JSON.parse(readFileSync(profile, 'utf8'));
+    // fill in model/embedding config if the profile leaves it blank
+    if (profile_json.model && !profile_json.model.url) {
+        profile_json.model.api = 'openai';
+        profile_json.model.url = llmUrl;
+        profile_json.model.model = llmModel;
+    }
+    if (profile_json.embedding && !profile_json.embedding.url) {
+        profile_json.embedding.api = 'openai';
+        profile_json.embedding.url = llmUrl;
+        profile_json.embedding.model = embeddingModel;
+    }
     settings.profile = profile_json;
     Mindcraft.createAgent(settings);
 }

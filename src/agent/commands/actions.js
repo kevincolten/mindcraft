@@ -1,9 +1,7 @@
 import * as skills from '../library/skills.js';
 import settings from '../settings.js';
 import convoManager from '../conversation.js';
-import fs from 'fs';
-
-const SCHEMATICS_DIR = '/app/schematics';
+import { searchSchematics, sampleSuggestions, countSchematics } from '../library/schematics.js';
 
 
 function runAsAction (actionFn, resume = false, timeout = -1) {
@@ -504,26 +502,57 @@ export const actionsList = [
     },
     {
         name: '!buildSchematic',
-        description: 'Search the local schematic library for a structure matching a keyword (e.g. "castle", "village", "tower") and build it at the current location using WorldEdit. Stand where you want the structure to appear before calling this.',
+        description: 'Build a structure from the schematic library at your current location. Use this whenever someone asks you to build something like a castle, house, tower, village, ship, etc. Describe what they asked for in plain words.',
         params: {
-            'keyword': { type: 'string', description: 'A word describing the structure to search for, e.g. "castle" or "farmhouse".' }
+            'description': { type: 'string', description: 'What to build, in plain words, e.g. "medieval castle with towers" or "small cozy wooden house".' }
         },
-        perform: async function (agent, keyword) {
-            let files;
-            try {
-                files = fs.readdirSync(SCHEMATICS_DIR);
-            } catch (e) {
-                return `Could not read schematic library: ${e.message}`;
+        perform: async function (agent, description) {
+            const matches = searchSchematics(description, 5);
+
+            if (matches.length === 0) {
+                const ideas = sampleSuggestions(4);
+                const total = countSchematics();
+                if (total === 0) {
+                    return "I don't have any building plans available right now.";
+                }
+                return `I couldn't find anything like "${description}". I have ${total} builds to choose from. Try asking for something like: ${ideas.join(', ')}.`;
             }
-            const lower = keyword.toLowerCase();
-            const match = files.find(f => f.toLowerCase().includes(lower) && (f.endsWith('.schem') || f.endsWith('.schematic')));
-            if (!match) {
-                return `No schematic found matching "${keyword}". Try a different word.`;
+
+            const best = matches[0];
+            agent.bot.chat(`Building a ${best.label}! Stand back...`);
+            agent.bot.chat(`//schematic load ${best.file.replace(/\.schem$/, '')}`);
+            await new Promise(r => setTimeout(r, 2000));
+            agent.bot.chat('//paste -a');
+
+            const alternatives = matches.slice(1, 4).map(m => m.label);
+            let result = `Built "${best.label}" at your location.`;
+            if (alternatives.length) {
+                result += ` If that's not what you wanted, I could also build: ${alternatives.join(', ')}.`;
             }
-            agent.bot.chat(`//schematic load ${match}`);
-            await new Promise(r => setTimeout(r, 1500));
-            agent.bot.chat(`//paste`);
-            return `Building "${match}"!`;
+            return result;
+        }
+    },
+    {
+        name: '!listSchematics',
+        description: 'Show a few example structures you can build, so players know what to ask for.',
+        params: {
+            'search': { type: 'string', description: 'Optional word to search for, e.g. "castle". Use "any" to show random examples.' }
+        },
+        perform: async function (agent, search) {
+            const total = countSchematics();
+            if (total === 0) return "I don't have any building plans available right now.";
+
+            if (!search || search.toLowerCase() === 'any' || search.trim() === '') {
+                const ideas = sampleSuggestions(6);
+                return `I know how to build ${total} different structures! Some examples: ${ideas.join(', ')}. Just ask me to build something.`;
+            }
+
+            const matches = searchSchematics(search, 6);
+            if (matches.length === 0) {
+                const ideas = sampleSuggestions(4);
+                return `Nothing matched "${search}". Try something like: ${ideas.join(', ')}.`;
+            }
+            return `I found these matching "${search}": ${matches.map(m => m.label).join(', ')}.`;
         }
     },
 ];

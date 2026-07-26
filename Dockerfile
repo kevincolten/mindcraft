@@ -26,6 +26,9 @@ RUN apt-get update && \
     libxrandr-dev \
     && rm -rf /var/lib/apt/lists/*
 
+# Python deps for the schematic converter (tools/convert_schematics.py)
+RUN pip install --no-cache-dir --break-system-packages datasets mcschematic
+
 WORKDIR /app
 
 COPY package*.json .

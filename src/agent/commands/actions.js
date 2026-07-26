@@ -1,6 +1,9 @@
 import * as skills from '../library/skills.js';
 import settings from '../settings.js';
 import convoManager from '../conversation.js';
+import fs from 'fs';
+
+const SCHEMATICS_DIR = '/app/schematics';
 
 
 function runAsAction (actionFn, resume = false, timeout = -1) {
@@ -498,5 +501,29 @@ export const actionsList = [
         perform: runAsAction(async (agent, tool_name, target) => {
             await skills.useToolOn(agent.bot, tool_name, target);
         })
+    },
+    {
+        name: '!buildSchematic',
+        description: 'Search the local schematic library for a structure matching a keyword (e.g. "castle", "village", "tower") and build it at the current location using WorldEdit. Stand where you want the structure to appear before calling this.',
+        params: {
+            'keyword': { type: 'string', description: 'A word describing the structure to search for, e.g. "castle" or "farmhouse".' }
+        },
+        perform: async function (agent, keyword) {
+            let files;
+            try {
+                files = fs.readdirSync(SCHEMATICS_DIR);
+            } catch (e) {
+                return `Could not read schematic library: ${e.message}`;
+            }
+            const lower = keyword.toLowerCase();
+            const match = files.find(f => f.toLowerCase().includes(lower) && (f.endsWith('.schem') || f.endsWith('.schematic')));
+            if (!match) {
+                return `No schematic found matching "${keyword}". Try a different word.`;
+            }
+            agent.bot.chat(`//schematic load ${match}`);
+            await new Promise(r => setTimeout(r, 1500));
+            agent.bot.chat(`//paste`);
+            return `Building "${match}"!`;
+        }
     },
 ];

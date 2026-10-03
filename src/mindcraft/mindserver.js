@@ -276,10 +276,9 @@ export function createMindServer(host_public = false, port = 8080) {
         });
     });
 
-    if (host_public) {
-        console.log('Public hosting not supported yet. Using localhost.');
-    }
-    const host = 'localhost';
+    // MINDSERVER_HOST lets the UI listen beyond loopback, e.g. '::' (all interfaces,
+    // IPv4 and IPv6) so it is reachable over the LAN or Tailscale. Defaults to localhost.
+    const host = process.env.MINDSERVER_HOST || (host_public ? '::' : 'localhost');
     server.listen(port, host, () => {
         console.log(`MindServer running on port ${port} on host ${host}`);
     });

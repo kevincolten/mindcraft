@@ -44,14 +44,18 @@ export class GPT {
                     stop: stop_seq,
                     ...(this.params || {})
                 };
-                if (model.includes('o1') || model.includes('o3') || model.includes('5')) {
-                    delete pack.stop;
-                }
+                // Never send stop sequences to custom endpoints. Reasoning models served by
+                // LM Studio (andy-4.2) apply them to the thinking stream too, so a stop string
+                // that shows up while the model is reasoning ends the turn with empty content.
+                // The response is trimmed at stop_seq below instead.
+                delete pack.stop;
                 let completion = await this.openai.chat.completions.create(pack);
                 if (completion.choices[0].finish_reason == 'length')
                     throw new Error('Context length exceeded'); 
                 console.log('Received.');
-                res = completion.choices[0].message.content;
+                res = completion.choices[0].message.content || '';
+                let stop_index = res.indexOf(stop_seq);
+                res = stop_index !== -1 ? res.slice(0, stop_index) : res;
             } 
             // otherwise, use responses
             else {

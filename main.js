@@ -95,6 +95,10 @@ for (let profile of settings.profiles) {
         profile_json.model.api = 'openai';
         profile_json.model.url = llmUrl;
         profile_json.model.model = llmModel;
+        // cap generation length so a runaway completion cannot block a local server
+        if (process.env.LLM_MAX_TOKENS) {
+            profile_json.model.params = { max_tokens: Number(process.env.LLM_MAX_TOKENS) };
+        }
     }
     if (profile_json.embedding && !profile_json.embedding.url) {
         profile_json.embedding.api = 'openai';
